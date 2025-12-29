@@ -1,26 +1,44 @@
 // src/middleware/authMiddleware.js
 const jwt = require('jsonwebtoken');
 
-// 1. Verificar si tiene un Token válido (esto ya deberías tenerlo, pero lo reforzamos)
+// 1. Verificar Token (Versión mejorada y robusta)
 exports.verificarToken = (req, res, next) => {
-    const token = req.header('Authorization');
-    if (!token) return res.status(401).json({ msg: 'Acceso denegado, falta el token' });
+    // 1. Obtener la cabecera
+    const authHeader = req.header('Authorization');
+    
+    if (!authHeader) {
+        return res.status(401).json({ msg: 'Acceso denegado, falta el token' });
+    }
 
     try {
-        // Asegúrate de que process.env.JWT_SECRET coincida con tu .env
-        const verified = jwt.verify(token.replace("Bearer ", ""), process.env.JWT_SECRET);
+        // 2. LIMPIEZA TOTAL DEL TOKEN
+        // Primero quitamos la palabra "Bearer " (case insensitive por si acaso)
+        let token = authHeader.replace(/^Bearer\s+/i, "");
+        
+        // Luego quitamos comillas dobles o simples que hayan podido quedar
+        token = token.replace(/['"]+/g, '').trim();
+
+        // (Opcional) Ver en consola qué estamos verificando
+        // console.log("Token limpio recibido:", token);
+
+        // 3. Verificar
+        const verified = jwt.verify(token, process.env.JWT_SECRET);
         req.user = verified;
         next();
+
     } catch (error) {
-        res.status(400).json({ msg: 'Token no válido' });
+        // IMPORTANTE: Imprimir el error real en la consola del servidor (VS Code)
+        console.log("Error al verificar token:", error.message);
+        
+        // Responder al cliente
+        res.status(400).json({ msg: 'Token no válido', error: error.message });
     }
 };
 
-// 2. Permitir SOLO a Jefes (Admin y Técnicos)
+// ... la función esJefe la dejas igual ...
 exports.esJefe = (req, res, next) => {
-    // Asumiendo que tu token guarda el rol como 'rol' o 'role'
-    if (req.user.rol === 'admin' || req.user.rol === 'tecnico') {
-        next(); // Puede pasar
+    if (req.user && (req.user.rol === 'admin' || req.user.rol === 'tecnico')) {
+        next();
     } else {
         res.status(403).json({ msg: 'Acceso denegado: Solo para Administradores o Técnicos' });
     }
